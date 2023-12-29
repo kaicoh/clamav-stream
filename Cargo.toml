@@ -2,6 +2,14 @@
 name = "clamav-stream"
 version = "0.1.0"
 edition = "2021"
+resolver = "2"
+authors = ["kaicoh <sumireminami@gmail.com>"]
+keywords = ["clamav", "stream"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/kaicoh/clamav-stream"
+documentation = "https://docs.rs/clamav-stream"
+description = "Scan and consume byte streams"
 
 [dependencies]
 tokio-stream = "0.1.14"
