@@ -1,0 +1,12 @@
+[package]
+name = "clamav-stream"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio-stream = "0.1.14"
+bytes = "1"
+pin-project = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
