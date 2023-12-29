@@ -15,12 +15,8 @@ const CLEAN_FILE_CONTENTS: &str = "Hello World!\n";
 
 #[tokio::test]
 async fn scan_clean_file() {
-    let err_msg = format!("Could not read test file {}", CLEAN_FILE_PATH);
-    let file = File::open(CLEAN_FILE_PATH).await.expect(&err_msg);
-    let mut input = ReaderStream::new(file);
-
-    let err_msg = format!("Could not connect tcp address {}", HOST_ADDRESS);
-    let stream = ScannedStream::<_, TcpStream>::tcp(&mut input, HOST_ADDRESS).expect(&err_msg);
+    let mut input = read_file(CLEAN_FILE_PATH).await;
+    let stream = scanned_stream(&mut input);
 
     let result = consume(stream).await;
     assert!(result.is_ok());
@@ -29,12 +25,8 @@ async fn scan_clean_file() {
 
 #[tokio::test]
 async fn scan_infected_file() {
-    let err_msg = format!("Could not read test file {}", EICAR_FILE_PATH);
-    let file = File::open(EICAR_FILE_PATH).await.expect(&err_msg);
-    let mut input = ReaderStream::new(file);
-
-    let err_msg = format!("Could not connect tcp address {}", HOST_ADDRESS);
-    let stream = ScannedStream::<_, TcpStream>::tcp(&mut input, HOST_ADDRESS).expect(&err_msg);
+    let mut input = read_file(EICAR_FILE_PATH).await;
+    let stream = scanned_stream(&mut input);
 
     let result = consume(stream).await;
     assert!(result.is_err());
@@ -42,6 +34,19 @@ async fn scan_infected_file() {
         result.unwrap_err().to_string(),
         EICAR_FILE_SIGNATURE_FOUND_RESPONSE
     );
+}
+
+async fn read_file(path: &str) -> ReaderStream<File> {
+    let err_msg = format!("Could not read test file {}", EICAR_FILE_PATH);
+    let file = File::open(path).await.expect(&err_msg);
+    ReaderStream::new(file)
+}
+
+fn scanned_stream(
+    input: &mut ReaderStream<File>,
+) -> ScannedStream<'_, ReaderStream<File>, TcpStream> {
+    let err_msg = format!("Could not connect tcp address {}", HOST_ADDRESS);
+    ScannedStream::<_, TcpStream>::tcp(input, HOST_ADDRESS).expect(&err_msg)
 }
 
 async fn consume<S>(mut stream: S) -> Result<String, Error>
