@@ -1,5 +1,9 @@
 # clamav-stream
 
+[![Version](https://img.shields.io/crates/v/clamav-stream)](https://crates.io/crates/clamav-stream)
+[![License](https://img.shields.io/crates/l/clamav-stream)](LICENSE)
+[![Test](https://img.shields.io/github/actions/workflow/status/kaicoh/clamav-stream/test.yml)](https://github.com/kaicoh/clamav-stream/actions/workflows/test.yml)
+
 A `ScannedStream` is a wrapper stream holding byte stream. It sends the inner stream to [clamav](https://www.clamav.net/) to scan it while passes it through to the consumer.
 
 This library is inspired by the [toblux/rust-clamav-client](https://github.com/toblux/rust-clamav-client).
