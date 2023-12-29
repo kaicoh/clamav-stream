@@ -15,7 +15,7 @@ const START: &[u8; 10] = b"zINSTREAM\0";
 const FINISH: &[u8; 4] = &[0, 0, 0, 0];
 const CHUNK_SIZE: usize = 4096;
 
-type BoxError = Box<dyn std::error::Error + Send + Sync>;
+pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 #[pin_project]
 pub struct ScannedStream<'a, St: ?Sized, RW: Read + Write> {
