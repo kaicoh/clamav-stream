@@ -224,7 +224,7 @@ mod tests {
         assert_eq!(result.unwrap(), "Hello World");
 
         assert_eq!(inner.written.len(), 4);
-        assert_eq!(inner.written.get(0).unwrap(), "zINSTREAM\0");
+        assert_eq!(inner.written.first().unwrap(), "zINSTREAM\0");
         assert_eq!(
             inner.written.get(1).unwrap(),
             &String::from_utf8(("Hello World".len() as u32).to_be_bytes().to_vec()).unwrap(),
