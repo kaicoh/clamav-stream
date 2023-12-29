@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use clamav_stream::{BoxError, ScannedStream};
+use clamav_stream::{Error, ScannedStream};
 use std::net::TcpStream;
 use tokio::fs::File;
 use tokio_stream::{Stream, StreamExt};
@@ -17,7 +17,7 @@ const CLEAN_FILE_CONTENTS: &str = "Hello World!\n";
 async fn scan_clean_file() {
     let err_msg = format!("Could not read test file {}", CLEAN_FILE_PATH);
     let file = File::open(CLEAN_FILE_PATH).await.expect(&err_msg);
-    let mut input = ReaderStream::new(file).map(boxed);
+    let mut input = ReaderStream::new(file);
 
     let err_msg = format!("Could not connect tcp address {}", HOST_ADDRESS);
     let stream = ScannedStream::<_, TcpStream>::tcp(&mut input, HOST_ADDRESS).expect(&err_msg);
@@ -31,7 +31,7 @@ async fn scan_clean_file() {
 async fn scan_infected_file() {
     let err_msg = format!("Could not read test file {}", EICAR_FILE_PATH);
     let file = File::open(EICAR_FILE_PATH).await.expect(&err_msg);
-    let mut input = ReaderStream::new(file).map(boxed);
+    let mut input = ReaderStream::new(file);
 
     let err_msg = format!("Could not connect tcp address {}", HOST_ADDRESS);
     let stream = ScannedStream::<_, TcpStream>::tcp(&mut input, HOST_ADDRESS).expect(&err_msg);
@@ -44,13 +44,9 @@ async fn scan_infected_file() {
     );
 }
 
-fn boxed(result: Result<Bytes, std::io::Error>) -> Result<Bytes, BoxError> {
-    result.map_err(|err| err.into())
-}
-
-async fn consume<S>(mut stream: S) -> Result<String, BoxError>
+async fn consume<S>(mut stream: S) -> Result<String, Error>
 where
-    S: Stream<Item = Result<Bytes, BoxError>> + Unpin,
+    S: Stream<Item = Result<Bytes, Error>> + Unpin,
 {
     let mut bytes: Vec<u8> = vec![];
 
@@ -59,6 +55,6 @@ where
         bytes.append(&mut chunk.into());
     }
 
-    let res = String::from_utf8(bytes)?;
-    Ok(res)
+    let res = std::str::from_utf8(&bytes)?;
+    Ok(res.to_string())
 }
