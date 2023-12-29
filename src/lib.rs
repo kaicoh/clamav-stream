@@ -1,11 +1,78 @@
+//! A [`ScannedStream`] sends the inner stream to [clamav](https://www.clamav.net/) to scan its
+//! contents while passes it through to the stream consumer.
+//!
+//! If a virus is detected by the clamav, it returns Err as stream chunk otherwise it just passes the
+//! inner stream through to the consumer.
+//!
+//! ## When the byte stream is clean
+//!
+//! There are no deferences between consuming [`ScannedStream`] and its inner stream.
+//! ```rust,no_run
+//! use clamav_stream::ScannedStream;
+//!
+//! use bytes::Bytes;
+//! use std::net::TcpStream;
+//! use tokio::fs::File;
+//! use tokio_stream::StreamExt;
+//! use tokio_util::io::ReaderStream;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let file = File::open("tests/clean.txt").await.unwrap();
+//!     let mut input = ReaderStream::new(file);
+//!
+//!     let addr = "localhost:3310"; // tcp address to clamav server.
+//!     let mut stream = ScannedStream::<_, TcpStream>::tcp(&mut input, addr).unwrap();
+//!
+//!     // The result of consuming ScannedStream is equal to consuming the input stream.
+//!     assert_eq!(stream.next().await, Some(Ok(Bytes::from("file contents 1st"))));
+//!     assert_eq!(stream.next().await, Some(Ok(Bytes::from("file contents 2nd"))));
+//!     // ... continue until all contents are consumed ...
+//!     assert_eq!(stream.next().await, Some(Ok(Bytes::from("file contents last"))));
+//!     assert_eq!(stream.next().await, None);
+//! }
+//! ```
+//!
+//! ## When the byte stream is infected
+//!
+//! An Err is returned after all contents are consumed.
+//! ```rust,no_run
+//! use clamav_stream::{Error, ScannedStream};
+//!
+//! use bytes::Bytes;
+//! use std::net::TcpStream;
+//! use tokio::fs::File;
+//! use tokio_stream::StreamExt;
+//! use tokio_util::io::ReaderStream;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let file = File::open("tests/eicar.txt").await.unwrap();
+//!     let mut input = ReaderStream::new(file);
+//!
+//!     let addr = "localhost:3310"; // tcp address to clamav server.
+//!     let mut stream = ScannedStream::<_, TcpStream>::tcp(&mut input, addr).unwrap();
+//!
+//!     // An Err is returned after all contents are consumed.
+//!     assert_eq!(stream.next().await, Some(Ok(Bytes::from("file contents 1st"))));
+//!     assert_eq!(stream.next().await, Some(Ok(Bytes::from("file contents 2nd"))));
+//!     // ... continue until all contents are consumed ...
+//!     assert_eq!(stream.next().await, Some(Ok(Bytes::from("file contents last"))));
+//!     assert_eq!(stream.next().await, Some(Err(Error::Scan("message from clamav".into()))));
+//!     assert_eq!(stream.next().await, None);
+//! }
+//! ```
+
+mod error;
+pub use error::Error;
+
 use pin_project::pin_project;
 use std::{
     error::Error as StdError,
-    io::{self, Read, Write},
+    io::{Read, Write},
     net::{TcpStream, ToSocketAddrs},
     path::Path,
     pin::{pin, Pin},
-    str::Utf8Error,
     task::{Context, Poll},
 };
 use tokio_stream::Stream;
@@ -17,33 +84,7 @@ const START: &[u8; 10] = b"zINSTREAM\0";
 const FINISH: &[u8; 4] = &[0, 0, 0, 0];
 const CHUNK_SIZE: usize = 4096;
 
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("io error: {0}")]
-    Io(io::Error),
-
-    #[error("utf8 error: {0}")]
-    Utf8(Utf8Error),
-
-    #[error("stream error: {0}")]
-    Stream(Box<dyn StdError + Send + Sync>),
-
-    #[error("{0}")]
-    Scan(String),
-}
-
-impl From<io::Error> for Error {
-    fn from(error: io::Error) -> Self {
-        Self::Io(error)
-    }
-}
-
-impl From<Utf8Error> for Error {
-    fn from(error: Utf8Error) -> Self {
-        Self::Utf8(error)
-    }
-}
-
+/// A wrapper stream holding byte stream. This sends the inner stream to [clamav](https://www.clamav.net/) to scan it while passes it through to the consumer.
 #[pin_project]
 pub struct ScannedStream<'a, St: ?Sized, RW: Read + Write> {
     #[pin]
@@ -117,6 +158,7 @@ where
     RW: Read + Write,
     E: StdError,
 {
+    /// Create a new [`ScannedStream`]
     pub fn new(input: &'a mut St, inner: RW) -> Self {
         Self {
             input,
@@ -126,19 +168,21 @@ where
         }
     }
 
+    /// Create a new [`ScannedStream`] connecting to clamav server with tcp socket.
     pub fn tcp(
         input: &'a mut St,
         addr: impl ToSocketAddrs,
-    ) -> io::Result<ScannedStream<'a, St, TcpStream>> {
+    ) -> Result<ScannedStream<'a, St, TcpStream>, Error> {
         let inner = TcpStream::connect(addr)?;
         Ok(ScannedStream::new(input, inner))
     }
 
+    /// Create a new [`ScannedStream`] connecting to clamav server with unix socket.
     #[cfg(unix)]
     pub fn socket(
         input: &'a mut St,
         path: impl AsRef<Path>,
-    ) -> io::Result<ScannedStream<'a, St, UnixStream>> {
+    ) -> Result<ScannedStream<'a, St, UnixStream>, Error> {
         let inner = UnixStream::connect(path)?;
         Ok(ScannedStream::new(input, inner))
     }
@@ -166,7 +210,7 @@ fn read_stream_response(stream: &mut impl Read) -> Result<(), Error> {
 mod tests {
     use super::*;
     use bytes::Bytes;
-    use std::io::Cursor;
+    use std::io::{self, Cursor};
     use tokio_stream::StreamExt;
 
     #[tokio::test]
